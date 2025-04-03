@@ -11,27 +11,18 @@ def criar_banco():
     terminal_sql = conexao.cursor()
 
     # Tabela de cadastros
-    terminal_sql.execute("""CREATE TABLE IF NOT EXISTS cadastros (
-                         nome text, 
-                         quantidade decimal, 
-                         descricao text, 
-                         preco decimal)""")
+    terminal_sql.execute("""CREATE TABLE IF NOT EXISTS cadastros (nome text, quantidade decimal, descricao text, 
+    preco decimal)""")
 
     # Tabela de entradas
-    terminal_sql.execute("""CREATE TABLE IF NOT EXISTS entradas (
-                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                         produto TEXT NOT NULL,
-                         quantidade REAL NOT NULL,
-                         data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                         FOREIGN KEY(produto) REFERENCES cadastros(nome))""")
+    terminal_sql.execute("""CREATE TABLE IF NOT EXISTS entradas (id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produto TEXT NOT NULL,quantidade REAL NOT NULL,data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(produto) REFERENCES cadastros(nome))""")
 
     # Tabela de saídas
-    terminal_sql.execute("""CREATE TABLE IF NOT EXISTS saidas (
-                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                         produto TEXT NOT NULL,
-                         quantidade REAL NOT NULL,
-                         data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                         FOREIGN KEY(produto) REFERENCES cadastros(nome))""")
+    terminal_sql.execute("""CREATE TABLE IF NOT EXISTS saidas (id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produto TEXT NOT NULL,quantidade REAL NOT NULL,data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(produto) 
+    REFERENCES cadastros(nome))""")
 
     conexao.commit()
     conexao.close()
@@ -98,10 +89,8 @@ def dados_tela_entrada_cadastro():
         nome = produto[0]
 
         # Cria um botão/checkbox para cada item
-        btn = customtkinter.CTkCheckBox(
-            scrollable_entrada,
-            text=nome,
-            state="normal" if selected_entrada is None or selected_entrada == nome else "disabled")
+        btn = customtkinter.CTkCheckBox(scrollable_entrada,text=nome,state="normal" if selected_entrada is None or
+        selected_entrada == nome else "disabled")
 
         # Configura o comando
         btn.configure(command=lambda n=nome, b=btn: selecionar_entrada(n, b))
@@ -181,8 +170,6 @@ def seleciona_item_entrada(arg_item):
 global nome_produto_tela_editar, preco_produto_tela_editar, descricao_tela_editar
 
 
-
-
 # Variável global para armazenar os itens adicionados
 itens_adicionados_entrada = []
 
@@ -232,6 +219,7 @@ def limpar_campos_entrada():
 itens_adicionados = []  # Reseta a lista
 
 
+
 def salvar_entrada():
     global itens_adicionados_entrada
 
@@ -246,15 +234,6 @@ def salvar_entrada():
     try:
         conexao = sqlite3.connect("banco_dados_estoque.db")
         cursor = conexao.cursor()
-
-        # Verifica e cria tabela de entradas se não existir
-        cursor.execute("""CREATE TABLE IF NOT EXISTS entradas (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        produto TEXT NOT NULL,
-                        quantidade REAL NOT NULL,
-                        data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY(produto) REFERENCES cadastros(nome)
-                        )""")
 
         # Processa cada item da entrada
         for item_frame in itens_adicionados_entrada:
@@ -280,8 +259,13 @@ def salvar_entrada():
         # Atualiza o relatório
         ler_entradas()
 
-        # Limpa os campos
+        # Limpa os campos e os itens do scroll
         limpar_campos_entrada()
+
+        # Limpa os itens adicionados
+        for item in itens_adicionados_entrada[:]:  # Usamos [:] para criar uma cópia da lista
+            item.destroy()
+            itens_adicionados_entrada.remove(item)
 
     except ValueError:
         messagebox.showerror("Erro", "Quantidade inválida!")
@@ -304,18 +288,16 @@ def ler_entradas():
             tabela_entrada.delete(row)
 
         # Busca as entradas registradas formatando a data
-        cursor.execute("""SELECT produto, quantidade, 
-                         strftime('%d/%m/%Y %H:%M', data) 
-                         FROM entradas ORDER BY data DESC""")
+        cursor.execute("""SELECT produto, quantidade, strftime('%d/%m/%Y %H:%M', data) 
+         FROM entradas ORDER BY data DESC""")
         entradas = cursor.fetchall()
 
         # Adiciona cada entrada na tabela
         for entrada in entradas:
-            tabela_entrada.insert("", tk.END, values=(
-                entrada[0],  # Nome do produto
+            tabela_entrada.insert("", tk.END, values=(entrada[0],  # Nome do produto
                 f"{entrada[1]:.2f} un",  # Quantidade formatada
-                entrada[2]  # Data formatada
-            ))
+                entrada[2]))  # Data formatada
+
 
     except Exception as e:
         messagebox.showerror("Erro", f"Erro ao carregar entradas:\n{str(e)}")
@@ -503,7 +485,6 @@ def cancelar_edicao():
 
 
 
-
 # inserir dados e apagar itens  duplicados na caixinha tela saida
 # Variáveis para controle de seleção
 selected_saida = None
@@ -688,8 +669,13 @@ def salvar_saida():
         # Atualiza o relatório
         ler_saidas()
 
-        # Limpa os campos
+        # Limpa os campos e os itens do scroll
         limpar_campos_saida()
+
+        # Limpa os itens adicionados
+        for item in itens_adicionados_saida[:]:  # Usamos [:] para criar uma cópia da lista
+            item.destroy()
+            itens_adicionados_saida.remove(item)
 
     except ValueError:
         messagebox.showerror("Erro", "Quantidade inválida! Use números.")
