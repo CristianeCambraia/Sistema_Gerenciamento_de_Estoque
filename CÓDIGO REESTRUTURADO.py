@@ -5,10 +5,34 @@ import sqlite3
 
 # conecta com banco de dados
 # create
+
 def criar_banco():
     conexao = sqlite3.connect("banco_dados_estoque.db")
     terminal_sql = conexao.cursor()
-    terminal_sql.execute("CREATE TABLE IF NOT EXISTS cadastros (nome text, quantidade decimal, descricao text, preco decimal)")
+
+    # Tabela de cadastros
+    terminal_sql.execute("""CREATE TABLE IF NOT EXISTS cadastros (
+                         nome text, 
+                         quantidade decimal, 
+                         descricao text, 
+                         preco decimal)""")
+
+    # Tabela de entradas
+    terminal_sql.execute("""CREATE TABLE IF NOT EXISTS entradas (
+                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                         produto TEXT NOT NULL,
+                         quantidade REAL NOT NULL,
+                         data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                         FOREIGN KEY(produto) REFERENCES cadastros(nome))""")
+
+    # Tabela de saídas
+    terminal_sql.execute("""CREATE TABLE IF NOT EXISTS saidas (
+                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                         produto TEXT NOT NULL,
+                         quantidade REAL NOT NULL,
+                         data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                         FOREIGN KEY(produto) REFERENCES cadastros(nome))""")
+
     conexao.commit()
     conexao.close()
 
@@ -18,6 +42,8 @@ def limpar_campos_cadastro():
     nome_cadastro.delete(0, tk.END)  # Limpa o campo de nome
     preco_cadastro.delete(0, tk.END)  # Limpa o campo de preço
     descricao_cadastro.delete('1.0', tk.END)  # Limpa o campo de descrição
+
+
 
 # create
 def salvar_dados():
@@ -46,6 +72,10 @@ def ler_dados():
         descricao = str(i[2])
         preco = "R$ {:.2f}".format(float(i[3]))
         tabela_relatorio_estoque.insert("", tk.END, values=(nome, quantidade, descricao, preco))
+
+
+
+
 
 
 # inserir dados e apagar itens  duplicados na caixinha tela entrada
@@ -103,10 +133,19 @@ def selecionar_entrada(nome, checkbox):
                 widget.configure(state="normal")
         limpar_campos_entrada()
 
+
 def limpar_campos_entrada():
-    produto_nome_tela_entrada.configure(state='normal')  # Permite edição temporária para inserir texto
+    global selected_entrada
+    selected_entrada = None
+    produto_nome_tela_entrada.configure(state='normal')
     produto_nome_tela_entrada.delete(0, tk.END)
-    produto_nome_tela_entrada.configure(state='readonly')  # Bloqueia edição
+    produto_nome_tela_entrada.configure(state='readonly')
+    produto_qnt_tela_entrada.delete(0, tk.END)
+
+    # Limpa os itens da lista
+    for item in itens_adicionados_entrada:
+        item.destroy()
+itens_adicionados_entrada = []
 
 
 def seleciona_item_entrada(arg_item):
@@ -143,28 +182,146 @@ global nome_produto_tela_editar, preco_produto_tela_editar, descricao_tela_edita
 
 
 
-def seleciona_item(arg_item):
-    global selected_editar
 
-    conexao = sqlite3.connect("banco_dados_estoque.db")
-    terminal_sql_editar = conexao.cursor()
-    terminal_sql_editar.execute(f"SELECT * FROM cadastros WHERE nome ='{arg_item}'")
-    produto_selecionado = terminal_sql_editar.fetchone()
-    conexao.close()
+# Variável global para armazenar os itens adicionados
+itens_adicionados_entrada = []
 
-    if produto_selecionado:
-        # Limpa os campos antes de preencher
-        nome_produto_tela_editar.delete(0, tk.END)
-        preco_produto_tela_editar.delete(0, tk.END)
-        descricao_tela_editar.delete('1.0', tk.END)
 
-        # Preenche os campos com os dados do produto selecionado
-        nome_produto_tela_editar.insert(0, produto_selecionado[0])  # Nome
-        preco_produto_tela_editar.insert(0, produto_selecionado[3])  # Preço
-        descricao_tela_editar.insert('1.0', produto_selecionado[2])  # Descrição
+def adicionar_item():
+    global selected_entrada
 
-        # Atualiza a seleção global
-        selected_editar = arg_item
+
+    if selected_entrada:
+        # Pega a quantidade digitada (ou 1 se vazio)
+        quantidade = produto_qnt_tela_entrada.get() or "1"
+
+        # Cria um frame para o item
+        item_frame = customtkinter.CTkFrame(line_frame_tela_entrada)
+        item_frame.pack(fill='x', pady=2)
+
+        # Label com nome e quantidade
+        label = customtkinter.CTkLabel(item_frame,text=f"{selected_entrada} - {quantidade} un",width=200,anchor='w')
+        label.pack(side='left', padx=5)
+
+        # Botão de lixeira
+        btn_remover = customtkinter.CTkButton(item_frame,text="🗑️",width=30,command=lambda
+            frame=item_frame: remover_item(frame))
+        btn_remover.pack(side='right')
+
+        # Armazena o item
+        itens_adicionados_entrada.append(item_frame)
+
+        # Limpa o campo de quantidade após adicionar
+        produto_qnt_tela_entrada.delete(0, tk.END)
+
+
+def remover_item(frame):
+    global itens_adicionados_entrada
+    frame.destroy()
+    itens_adicionados_entrada.remove(frame)
+
+
+def limpar_campos_entrada():
+    # Limpa os campos de input
+    produto_nome_tela_entrada.delete(0, tk.END)
+    produto_qnt_tela_entrada.delete(0, tk.END)
+
+    # Remove todos os itens da lista direita
+    for item in itens_adicionados:
+        item.destroy()
+itens_adicionados = []  # Reseta a lista
+
+
+def salvar_entrada():
+    global itens_adicionados_entrada
+
+    if not itens_adicionados_entrada:
+        messagebox.showwarning("Aviso", "Nenhum item adicionado para registrar entrada!")
+        return
+
+    # Confirmação com usuário
+    if not messagebox.askyesno("Confirmar", "Deseja registrar esta entrada?"):
+        return
+
+    try:
+        conexao = sqlite3.connect("banco_dados_estoque.db")
+        cursor = conexao.cursor()
+
+        # Verifica e cria tabela de entradas se não existir
+        cursor.execute("""CREATE TABLE IF NOT EXISTS entradas (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        produto TEXT NOT NULL,
+                        quantidade REAL NOT NULL,
+                        data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(produto) REFERENCES cadastros(nome)
+                        )""")
+
+        # Processa cada item da entrada
+        for item_frame in itens_adicionados_entrada:
+            # Obtém os widgets do frame do item
+            for widget in item_frame.winfo_children():
+                if isinstance(widget, customtkinter.CTkLabel):
+                    texto = widget.cget("text")
+                    partes = texto.split(" - ")
+                    nome_produto = partes[0]
+                    quantidade = float(partes[1].replace(" un", ""))
+
+                    # Atualiza o estoque (aumenta a quantidade)
+                    cursor.execute("UPDATE cadastros SET quantidade = quantidade + ? WHERE nome = ?",
+                                   (quantidade, nome_produto))
+
+                    # Registra a entrada
+                    cursor.execute("INSERT INTO entradas (produto, quantidade) VALUES (?, ?)",
+                                   (nome_produto, quantidade))
+
+        conexao.commit()
+        messagebox.showinfo("Sucesso", "Entrada registrada com sucesso!")
+
+        # Atualiza o relatório
+        ler_entradas()
+
+        # Limpa os campos
+        limpar_campos_entrada()
+
+    except ValueError:
+        messagebox.showerror("Erro", "Quantidade inválida!")
+        conexao.rollback()
+    except Exception as e:
+        messagebox.showerror("Erro", f"Ocorreu um erro ao registrar entrada:\n{str(e)}")
+        conexao.rollback()
+    finally:
+        if 'conexao' in locals():
+            conexao.close()
+
+
+def ler_entradas():
+    try:
+        conexao = sqlite3.connect("banco_dados_estoque.db")
+        cursor = conexao.cursor()
+
+        # Limpa a tabela antes de carregar novos dados
+        for row in tabela_entrada.get_children():
+            tabela_entrada.delete(row)
+
+        # Busca as entradas registradas formatando a data
+        cursor.execute("""SELECT produto, quantidade, 
+                         strftime('%d/%m/%Y %H:%M', data) 
+                         FROM entradas ORDER BY data DESC""")
+        entradas = cursor.fetchall()
+
+        # Adiciona cada entrada na tabela
+        for entrada in entradas:
+            tabela_entrada.insert("", tk.END, values=(
+                entrada[0],  # Nome do produto
+                f"{entrada[1]:.2f} un",  # Quantidade formatada
+                entrada[2]  # Data formatada
+            ))
+
+    except Exception as e:
+        messagebox.showerror("Erro", f"Erro ao carregar entradas:\n{str(e)}")
+    finally:
+        if 'conexao' in locals():
+            conexao.close()
 
 
 # Adicione esta variável global no início do seu código (junto com as outras)
@@ -187,10 +344,8 @@ def dados_tela_editar_cadastro():
         nome = item[0]
 
         # Cria um botão/checkbox para cada item
-        btn = customtkinter.CTkCheckBox(
-            tabela_produtos_tela_editar,
-            text=nome,
-            state="normal" if selected_editar is None or selected_editar == nome else "disabled")
+        btn = customtkinter.CTkCheckBox(tabela_produtos_tela_editar,text=nome, state="normal" if selected_editar
+        is None or selected_editar == nome else "disabled")
 
         # Configura o comando
         btn.configure(command=lambda n=nome, b=btn: selecionar_editar(n, b))
@@ -200,6 +355,29 @@ def dados_tela_editar_cadastro():
             btn.select()
 
         btn.grid(pady=5)
+
+def seleciona_item(arg_item):
+    global selected_editar
+
+    conexao = sqlite3.connect("banco_dados_estoque.db")
+    terminal_sql_editar = conexao.cursor()
+    terminal_sql_editar.execute(f"SELECT * FROM cadastros WHERE nome ='{arg_item}'")
+    produto_selecionado = terminal_sql_editar.fetchone()
+    conexao.close()
+
+    if produto_selecionado:
+        # Limpa os campos antes de preencher
+        nome_produto_tela_editar.delete(0, tk.END)
+        preco_produto_tela_editar.delete(0, tk.END)
+        descricao_tela_editar.delete('1.0', tk.END)
+
+        # Preenche os campos com os dados do produto selecionado
+        nome_produto_tela_editar.insert(0, produto_selecionado[0])  # Nome
+        preco_produto_tela_editar.insert(0, produto_selecionado[3])  # Preço
+        descricao_tela_editar.insert('1.0', produto_selecionado[2])  # Descrição
+
+        # Atualiza a seleção global
+        selected_editar = arg_item
 
 
 def selecionar_editar(nome, checkbox):
@@ -246,11 +424,8 @@ def salvar_edicao():
         conexao = sqlite3.connect("banco_dados_estoque.db")
         terminal_sql = conexao.cursor()
 
-        terminal_sql.execute("""
-            UPDATE cadastros 
-            SET nome = ?, preco = ?, descricao = ?
-            WHERE nome = ?
-        """, (novo_nome, float(novo_preco), nova_descricao, selected_editar))
+        terminal_sql.execute("""UPDATE cadastros SET nome = ?, preco = ?, descricao = ?WHERE nome = ?""",
+        (novo_nome, float(novo_preco), nova_descricao, selected_editar))
 
         conexao.commit()
         conexao.close()
@@ -329,13 +504,10 @@ def cancelar_edicao():
 
 
 
-
-
-
-
 # inserir dados e apagar itens  duplicados na caixinha tela saida
 # Variáveis para controle de seleção
 selected_saida = None
+itens_adicionados_saida = []
 def dados_tela_saida_cadastro():
     global selected_saida
 
@@ -350,10 +522,8 @@ def dados_tela_saida_cadastro():
     for produto in produtos:
         nome = produto[0]
 
-        btn = customtkinter.CTkCheckBox(
-            scroll_tabela_saida,
-            text=nome,
-            state="normal" if selected_saida is None or selected_saida == nome else "disabled")
+        btn = customtkinter.CTkCheckBox(scroll_tabela_saida,text=nome,state="normal" if selected_saida
+        is None or selected_saida == nome else "disabled")
         btn.configure(command=lambda n=nome, b=btn: selecionar_saida(n, b))
 
         if selected_saida == nome:
@@ -387,10 +557,21 @@ def seleciona_item_saida(arg_item):
         quantidade_tela_saida.delete(0, tk.END)
 
 
+
+
 def limpar_campos_saida():
-    nome_produto_tela_saida.configure(state='normal')  # Permite edição temporária para inserir texto
+    global selected_saida
+    selected_saida = None
+    itens_adicionados_saida = []
+    nome_produto_tela_saida.configure(state='normal')
     nome_produto_tela_saida.delete(0, tk.END)
-    nome_produto_tela_saida.configure(state='readonly')  # Bloqueia edição
+    nome_produto_tela_saida.configure(state='readonly')
+    quantidade_tela_saida.delete(0, tk.END)
+
+    # Limpa os itens da lista
+    for item in itens_adicionados_saida:
+        item.destroy()
+    itens_adicionados_saida = []
 
 
 def selecionar_saida(nome, checkbox):
@@ -409,16 +590,148 @@ def selecionar_saida(nome, checkbox):
         for widget in scroll_tabela_saida.winfo_children():
             if isinstance(widget, customtkinter.CTkCheckBox):
                 widget.configure(state="normal")
+        limpar_campos_saida()  # Agora usa a função atualizada
+
+
+def adicionar_item_saida():
+    global selected_saida
+    global itens_adicionados_saida
+
+    if selected_saida:
+        # Pega a quantidade digitada (ou 1 se vazio)
+        quantidade = quantidade_tela_saida.get() or "1"
+
+        # Cria um frame para o item
+        item_frame = customtkinter.CTkFrame(caixa_saida)
+        item_frame.pack(fill='x', pady=2)
+
+        # Label com nome e quantidade
+        label = customtkinter.CTkLabel(item_frame,text=f"{selected_saida} - {quantidade} un",width=200,anchor='w')
+        label.pack(side='left', padx=5)
+
+        # Botão de lixeira
+        btn_remover = customtkinter.CTkButton(item_frame,text="🗑️",width=30,command=lambda
+        frame=item_frame: remover_item_saida(frame))
+        btn_remover.pack(side='right')
+
+        # Armazena o item
+        itens_adicionados_saida.append(item_frame)
+
+        # Limpa o campo de quantidade após adicionar
+        quantidade_tela_saida.delete(0, tk.END)
+
+
+def remover_item_saida(frame):
+    global itens_adicionados_saida
+    frame.destroy()
+    itens_adicionados_saida.remove(frame)
+
+
+from tkinter import messagebox
+from datetime import datetime
+
+
+
+def salvar_saida():
+    global itens_adicionados_saida
+
+    if not itens_adicionados_saida:
+        messagebox.showwarning("Aviso", "Nenhum item adicionado para registrar saída!")
+        return
+
+    # Confirmação com usuário
+    if not messagebox.askyesno("Confirmar", "Deseja registrar esta saída?"):
+        return
+
+    try:
+        conexao = sqlite3.connect("banco_dados_estoque.db")
+        cursor = conexao.cursor()
+
+        # Processa cada item da saída
+        for item_frame in itens_adicionados_saida:
+            # Obtém os widgets do frame do item
+            for widget in item_frame.winfo_children():
+                if isinstance(widget, customtkinter.CTkLabel):
+                    texto = widget.cget("text")
+                    partes = texto.split(" - ")
+                    nome_produto = partes[0]
+                    quantidade = float(partes[1].replace(" un", ""))
+
+                    # Verifica se há estoque suficiente
+                    cursor.execute("SELECT quantidade FROM cadastros WHERE nome = ?", (nome_produto,))
+                    resultado = cursor.fetchone()
+
+                    if resultado is None:
+                        messagebox.showerror("Erro", f"Produto '{nome_produto}' não encontrado no estoque!")
+                        conexao.rollback()
+                        return
+
+                    estoque_atual = resultado[0]
+
+                    if estoque_atual < quantidade:
+                        messagebox.showerror("Erro",
+                                             f"Estoque insuficiente para {nome_produto}!\nEstoque atual: {estoque_atual}")
+                        conexao.rollback()
+                        return
+
+                    # Atualiza o estoque (diminui a quantidade)
+                    cursor.execute("UPDATE cadastros SET quantidade = quantidade - ? WHERE nome = ?",
+                                   (quantidade, nome_produto))
+
+                    # Registra a saída
+                    cursor.execute("INSERT INTO saidas (produto, quantidade) VALUES (?, ?)",
+                                   (nome_produto, quantidade))
+
+        conexao.commit()
+        messagebox.showinfo("Sucesso", "Saída registrada com sucesso!")
+
+        # Atualiza o relatório
+        ler_saidas()
+
+        # Limpa os campos
         limpar_campos_saida()
 
+    except ValueError:
+        messagebox.showerror("Erro", "Quantidade inválida! Use números.")
+        if 'conexao' in locals():
+            conexao.rollback()
+    except Exception as e:
+        messagebox.showerror("Erro", f"Ocorreu um erro ao registrar saída:\n{str(e)}")
+        if 'conexao' in locals():
+            conexao.rollback()
+    finally:
+        if 'conexao' in locals():
+            conexao.close()
 
 
+def ler_saidas():
+    try:
+        conexao = sqlite3.connect("banco_dados_estoque.db")
+        cursor = conexao.cursor()
 
+        # Limpa a tabela antes de carregar novos dados
+        for row in tabela_saida.get_children():
+            tabela_saida.delete(row)
 
+        # Busca as saídas registradas formatando a data
+        cursor.execute("""SELECT produto, quantidade, 
+                         strftime('%d/%m/%Y %H:%M', data) 
+                         FROM saidas ORDER BY data DESC""")
+        saidas = cursor.fetchall()
 
+        # Adiciona cada saída na tabela
+        for saida in saidas:
+            tabela_saida.insert("", tk.END, values=(
+                saida[0],  # Nome do produto
+                f"{saida[1]:.2f} un",  # Quantidade formatada
+                saida[2]  # Data formatada
+            ))
 
-
-
+    except Exception as e:
+        messagebox.showerror("Erro", f"Erro ao carregar saídas:\n{str(e)}")
+    finally:
+        if 'conexao' in locals():
+            conexao.close()
 
 
 
@@ -466,6 +779,7 @@ def abrir_frame_tela_saida():
     frame_tela_saida.grid_propagate(False)
     frame_tela_saida.grid(row=0, column=1, padx=5, pady=5)
     dados_tela_saida_cadastro()
+    ler_entradas()
 
 
 def abrir_frame_tela_entrada():
@@ -505,6 +819,7 @@ def abrir_frame_relatorio_saida():
     # abrir frames
     frame_relatorio_saida.grid_propagate(False)
     frame_relatorio_saida.grid(row=0, column=1, padx=5, pady=5)
+    ler_saidas()
 
 
 def abrir_frame_relatorio_entrada():
@@ -561,21 +876,6 @@ def abrir_popup():
     janela_pop.mainloop()
 
 
-# def tela saida
-def on_trash_icon_click(item_number):
-    print(f"ícone de lixeira linha {item_number} clicado")
-
-
-def create_line(text, item_number):
-    label_item = customtkinter.CTkLabel(caixa_saida, text="item 1")
-    label_item.grid(pady=0, padx=5, row=item_number, column=0, stick="w")
-
-    icone_lixo = customtkinter.CTkButton(caixa_saida, text="🗑️", command=lambda: on_trash_icon_click(item_number),
-                                         width=20)
-    icone_lixo.grid(padx=0, pady=5, row=item_number, column=1, stick="e")
-
-    caixa_saida.grid_columnconfigure(0, weight=1)
-    caixa_saida.grid_columnconfigure(1, weight=0)
 
 
 # janela principal
@@ -654,7 +954,7 @@ botao_salvar_tela_cadastro = customtkinter.CTkButton(frame_cadastro, text="Salva
 botao_salvar_tela_cadastro.grid(padx=5, pady=5, sticky="e", row=4, column=1)
 
 botao_cancelar_tela_cadastro = customtkinter.CTkButton(frame_cadastro, text="Cancelar", width=80, fg_color="black",
-                                                       hover_color="#2f394a")
+                                                       hover_color="#2f394a", command=limpar_campos_cadastro)
 botao_cancelar_tela_cadastro.grid(padx=5, pady=5, row=4, column=1, stick="w")
 
 mensagem_cadastro = customtkinter.CTkLabel(frame_cadastro, text="Cadastro de Produtos", font=("Couvier", 18, "bold"),
@@ -700,14 +1000,13 @@ preco_produto_tela_editar.grid(padx=5, pady=0, row=3, column=1, stick="w", colum
 descricao_tela_editar = customtkinter.CTkTextbox(frame_tela_editar, width=300, height=80)
 descricao_tela_editar.grid(padx=5, pady=0, row=4, column=1, stick="w", columnspan=3)
 
-'''botao_excluir_tela_editar = customtkinter.CTkButton(frame_tela_editar, text="Excluir", width=80, fg_color="Red",
-                                                    hover_color="#2f394a")'''
 botao_excluir_tela_editar = customtkinter.CTkButton(frame_tela_editar, text="Excluir", width=80, fg_color="Red",
                                                     hover_color="#2f394a", command=excluir_item)
 
 botao_excluir_tela_editar.grid(padx=5, pady=5, row=5, column=1, stick="w")
 
-botao_cancelar_tela_editar = customtkinter.CTkButton(frame_tela_editar, text="Cancelar", width=80, fg_color="black",hover_color="#2f394a", command=cancelar_edicao)  # Adicionado o comando aqui
+botao_cancelar_tela_editar = customtkinter.CTkButton(frame_tela_editar, text="Cancelar", width=80, fg_color="black",
+                                        hover_color="#2f394a", command=cancelar_edicao)  # Adicionado o comando aqui
 botao_cancelar_tela_editar.grid(padx=0, pady=5, row=5, column=2)
 
 
@@ -737,22 +1036,23 @@ mensagem_tela_saida = customtkinter.CTkLabel(frame_tela_saida, text="Saída de p
                                              text_color="black")
 mensagem_tela_saida.grid(pady=0, padx=0, row=0, column=1)
 
+
 botao_cancelar_tela_saida = customtkinter.CTkButton(frame_tela_saida, text="Cancelar", width=80, fg_color="black",
-                                                    hover_color="#2f394a")
+                                                    hover_color="#2f394a", command=limpar_campos_saida)
 botao_cancelar_tela_saida.grid(padx=0, pady=5, row=5, column=1, stick="w")
 
+
 botao_salvar_tela_saida = customtkinter.CTkButton(frame_tela_saida, text="Salvar", width=80, fg_color="black",
-                                                  hover_color="#2f394a")
+                                                  hover_color="#2f394a", command=salvar_saida)
 botao_salvar_tela_saida.grid(padx=0, pady=5, row=5, column=2, stick="e")
 
-botao_adicionar_item_tela_saida = customtkinter.CTkButton(frame_tela_saida, text="Adicionar item", width=50,
-                                                          fg_color="black", hover_color="#2f394a",
-                                                          command=lambda: create_line(item, 1))
+
+botao_adicionar_item_tela_saida = customtkinter.CTkButton(frame_tela_saida, text="Adicionar", width=80,
+                                                fg_color="black", hover_color="#2f394a",command=adicionar_item_saida)
 botao_adicionar_item_tela_saida.grid(padx=0, pady=5, row=2, column=2, stick="e")
 
-'''items1 = [f"Item {i + 1}" for i in range(5)]
-for i, item in enumerate(items1):
-    create_line(item, i + 5)'''
+
+
 
 # janela de entrada
 scrollable_entrada = customtkinter.CTkScrollableFrame(frame_tela_entrada)
@@ -774,38 +1074,17 @@ line_frame_tela_entrada = customtkinter.CTkScrollableFrame(frame_tela_entrada, h
 line_frame_tela_entrada.grid(pady=0, row=3, column=1, columnspan=2, stick="we")
 
 botao_cancelar_tela_entrada = customtkinter.CTkButton(frame_tela_entrada, text="Cancelar", width=80, fg_color="black",
-                                                      hover_color="#2f394a")
+                                                      hover_color="#2f394a", command=limpar_campos_entrada)
 botao_cancelar_tela_entrada.grid(padx=0, pady=5, row=5, column=1, stick="w")
 
 botao_salvar_tela_entrada = customtkinter.CTkButton(frame_tela_entrada, text="Salvar", width=80, fg_color="black",
-                                                    hover_color="#2f394a")
+                                                    hover_color="#2f394a", command=salvar_entrada)
 botao_salvar_tela_entrada.grid(padx=0, pady=5, row=5, column=2, stick="e")
 
+botao_adicionar_item_tela_entrada = customtkinter.CTkButton(frame_tela_entrada, text="Adicionar", width=80,
+    fg_color="black", hover_color="#2f394a",command=adicionar_item)  # Remove o lambda, usa a função diretamente'''
 
-def on_trash_icon_click(item_number2):
-    print(f"ícone de lixeira linha {item_number2} clicado")
-
-
-def create_line(text, item_number2):
-    label2 = customtkinter.CTkLabel(line_frame_tela_entrada, text="item 1")
-    label2.grid(pady=0, padx=5, row=item_number2, column=0, stick="w")
-
-    trash_icon2 = customtkinter.CTkButton(line_frame_tela_entrada, text="🗑️",
-                                          command=lambda: on_trash_icon_click(item_number2), width=20)
-    trash_icon2.grid(padx=0, pady=5, row=item_number2, column=1, stick="e")
-
-    line_frame_tela_entrada.grid_columnconfigure(0, weight=1)
-    line_frame_tela_entrada.grid_columnconfigure(1, weight=0)
-
-
-botao_salvar_tela_entrada = customtkinter.CTkButton(frame_tela_entrada, text="Adicionar item", width=50,
-                                                    fg_color="black", hover_color="#2f394a",
-                                                    command=lambda: create_line(item, 1))
-botao_salvar_tela_entrada.grid(padx=0, pady=5, row=2, column=2, stick="e")
-
-'''items1 = [f"Item {i + 1}" for i in range(5)]
-for i, item in enumerate(items1):
-    create_line(item, i + 5)'''
+botao_adicionar_item_tela_entrada.grid(padx=0, pady=5, row=2, column=2, stick="e")
 
 mensagem_tela_entrada = customtkinter.CTkLabel(frame_tela_entrada, text="Entrada", font=("Couvier", 18, "bold"),
                                                text_color="black")
